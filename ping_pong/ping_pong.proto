@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package pingponggrpc;
+
+message Ping {
+    string message = 1;
+}
+
+message Pong {
+    string message = 1;
+    double timestamp = 2;
+}
+
+service PingPong {
+    rpc GetServerResponse(Ping) returns (Pong) {}
+}
