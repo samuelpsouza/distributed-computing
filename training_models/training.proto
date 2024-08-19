@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+message Row {
+    repeated float attributes = 1;
+    int32 label = 2;
+}
+
+message FitRequest {
+    repeated Row rows = 1;
+}
+
+message PredictReqquest {
+    Row row = 1;
+}
+
+message Response {
+    float accuracy = 1;
+}
+
+service CemtralizedMLP {
+    rpc GetTrainedModel(FitRequest) returns (Response) {}
+    rpc GetPrediction(PredictReqquest) returns (Response) {}
+}
