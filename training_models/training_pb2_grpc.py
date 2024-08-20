@@ -30,7 +30,7 @@ if _version_not_supported:
     )
 
 
-class CemtralizedMLPStub(object):
+class CentralizedMLPStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -40,18 +40,18 @@ class CemtralizedMLPStub(object):
             channel: A grpc.Channel.
         """
         self.GetTrainedModel = channel.unary_unary(
-                '/CemtralizedMLP/GetTrainedModel',
+                '/CentralizedMLP/GetTrainedModel',
                 request_serializer=training__pb2.FitRequest.SerializeToString,
                 response_deserializer=training__pb2.Response.FromString,
                 _registered_method=True)
         self.GetPrediction = channel.unary_unary(
-                '/CemtralizedMLP/GetPrediction',
+                '/CentralizedMLP/GetPrediction',
                 request_serializer=training__pb2.PredictReqquest.SerializeToString,
                 response_deserializer=training__pb2.Response.FromString,
                 _registered_method=True)
 
 
-class CemtralizedMLPServicer(object):
+class CentralizedMLPServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def GetTrainedModel(self, request, context):
@@ -67,7 +67,7 @@ class CemtralizedMLPServicer(object):
         raise NotImplementedError('Method not implemented!')
 
 
-def add_CemtralizedMLPServicer_to_server(servicer, server):
+def add_CentralizedMLPServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetTrainedModel': grpc.unary_unary_rpc_method_handler(
                     servicer.GetTrainedModel,
@@ -81,13 +81,13 @@ def add_CemtralizedMLPServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'CemtralizedMLP', rpc_method_handlers)
+            'CentralizedMLP', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('CemtralizedMLP', rpc_method_handlers)
+    server.add_registered_method_handlers('CentralizedMLP', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class CemtralizedMLP(object):
+class CentralizedMLP(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -104,7 +104,7 @@ class CemtralizedMLP(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/CemtralizedMLP/GetTrainedModel',
+            '/CentralizedMLP/GetTrainedModel',
             training__pb2.FitRequest.SerializeToString,
             training__pb2.Response.FromString,
             options,
@@ -131,7 +131,7 @@ class CemtralizedMLP(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/CemtralizedMLP/GetPrediction',
+            '/CentralizedMLP/GetPrediction',
             training__pb2.PredictReqquest.SerializeToString,
             training__pb2.Response.FromString,
             options,

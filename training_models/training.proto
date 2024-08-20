@@ -17,7 +17,7 @@ message Response {
     float accuracy = 1;
 }
 
-service CemtralizedMLP {
+service CentralizedMLP {
     rpc GetTrainedModel(FitRequest) returns (Response) {}
     rpc GetPrediction(PredictReqquest) returns (Response) {}
 }
