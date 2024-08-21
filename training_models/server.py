@@ -5,6 +5,7 @@ import training_pb2_grpc as pb2_grpc
 import training_pb2 as pb2
 
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score
 
 model = KNeighborsClassifier()
 
@@ -25,16 +26,17 @@ class ModelServer(pb2_grpc.CentralizedMLPServicer):
             'accuracy': accuracy
         }
 
-        return pb2.Response(**res)
+        return pb2.FitResponse(**res)
     
     def GetPrediction(self, request, context):
-        ac = model.predict(request.row)
+        y_pred = model.predict([(request.row.attributes)])
+        print(f"Class prediction for {request.row.attributes} is {y_pred}")
 
         res = {
-            'accuracy': ac
+            'class': y_pred[0]
         }
 
-        return pb2.Response(**res)
+        return pb2.PredictResponse(**res)
     
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

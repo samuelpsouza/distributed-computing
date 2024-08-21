@@ -42,12 +42,12 @@ class CentralizedMLPStub(object):
         self.GetTrainedModel = channel.unary_unary(
                 '/CentralizedMLP/GetTrainedModel',
                 request_serializer=training__pb2.FitRequest.SerializeToString,
-                response_deserializer=training__pb2.Response.FromString,
+                response_deserializer=training__pb2.FitResponse.FromString,
                 _registered_method=True)
         self.GetPrediction = channel.unary_unary(
                 '/CentralizedMLP/GetPrediction',
-                request_serializer=training__pb2.PredictReqquest.SerializeToString,
-                response_deserializer=training__pb2.Response.FromString,
+                request_serializer=training__pb2.PredictRequest.SerializeToString,
+                response_deserializer=training__pb2.PredictResponse.FromString,
                 _registered_method=True)
 
 
@@ -72,12 +72,12 @@ def add_CentralizedMLPServicer_to_server(servicer, server):
             'GetTrainedModel': grpc.unary_unary_rpc_method_handler(
                     servicer.GetTrainedModel,
                     request_deserializer=training__pb2.FitRequest.FromString,
-                    response_serializer=training__pb2.Response.SerializeToString,
+                    response_serializer=training__pb2.FitResponse.SerializeToString,
             ),
             'GetPrediction': grpc.unary_unary_rpc_method_handler(
                     servicer.GetPrediction,
-                    request_deserializer=training__pb2.PredictReqquest.FromString,
-                    response_serializer=training__pb2.Response.SerializeToString,
+                    request_deserializer=training__pb2.PredictRequest.FromString,
+                    response_serializer=training__pb2.PredictResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -106,7 +106,7 @@ class CentralizedMLP(object):
             target,
             '/CentralizedMLP/GetTrainedModel',
             training__pb2.FitRequest.SerializeToString,
-            training__pb2.Response.FromString,
+            training__pb2.FitResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -132,8 +132,8 @@ class CentralizedMLP(object):
             request,
             target,
             '/CentralizedMLP/GetPrediction',
-            training__pb2.PredictReqquest.SerializeToString,
-            training__pb2.Response.FromString,
+            training__pb2.PredictRequest.SerializeToString,
+            training__pb2.PredictResponse.FromString,
             options,
             channel_credentials,
             insecure,

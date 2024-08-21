@@ -9,15 +9,19 @@ message FitRequest {
     repeated Row rows = 1;
 }
 
-message PredictReqquest {
+message PredictRequest {
     Row row = 1;
 }
 
-message Response {
+message FitResponse {
     float accuracy = 1;
 }
 
+message PredictResponse {
+    int32 class = 1;
+}
+
 service CentralizedMLP {
-    rpc GetTrainedModel(FitRequest) returns (Response) {}
-    rpc GetPrediction(PredictReqquest) returns (Response) {}
+    rpc GetTrainedModel(FitRequest) returns (FitResponse) {}
+    rpc GetPrediction(PredictRequest) returns (PredictResponse) {}
 }
