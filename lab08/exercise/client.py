@@ -7,6 +7,7 @@ import grpc
 import time
 import numpy as np
 import os
+import ray
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
@@ -14,8 +15,9 @@ def create_partial_model(input_layer):
     layer1 = keras.layers.Conv2D(32, (3, 3), activation='relu')(input_layer)
     layer2 = keras.layers.MaxPooling2D((2, 2))(layer1)
     layer3 = keras.layers.Conv2D(64, (3, 3), activation='relu')(layer2)
-    layer4 = keras.layers.Dense(128, activation='relu')(layer3)
-    return Model(inputs=input_layer, outputs=layer4)
+    layer4 = keras.layers.Flatten()(layer3)
+    layer5 = keras.layers.Dense(128, activation='relu')(layer4)
+    return Model(inputs=input_layer, outputs=layer5)
 
 
 def get_activations(model, X):
@@ -38,19 +40,24 @@ def send_activations_to_server(stub, activations, labels, batch_size, client_id)
 # CIFAR-10 dataset
 cifar10                              = keras.datasets.cifar10
 (X_train, y_train), (X_test, y_test) = cifar10.load_data()
+
+# MNIST dataset
+#mnist = keras.datasets.mnist
+#(X_train, y_train), (X_test, y_test) = mnist.load_data()
+
 X_train, X_test                      = X_train / 255.0, X_test / 255.0
 
-partial_model    = create_partial_model(keras.layers.Input(shape=(32, 32, 3)))
-client_optimizer = tf.keras.optimizers.Adam()
 
-MAX_MESSAGE_LENGTH = 20 * 1024 * 1024 * 10
-channel = grpc.insecure_channel('localhost:50051', options=[
-    ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
-    ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH),
-])
-stub = pb2_grpc.SplitLearningStub(channel)
+def train_step(x_batch, y_batch, epoch):
+    MAX_MESSAGE_LENGTH = 20 * 1024 * 1024 * 10
+    channel = grpc.insecure_channel('172.17.0.1:50051', options=[
+        ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
+        ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH),
+    ])
 
-def train_step(model, x_batch, y_batch, batch, optimizer, epoch, stub):
+    stub = pb2_grpc.SplitLearningStub(channel)
+    model    = create_partial_model(keras.layers.Input(shape=(32, 32, 3)))
+    optimizer = tf.keras.optimizers.Adam()
 
     activations, tape     = get_activations(model, x_batch)
     flattened_activations = tf.reshape(activations, (activations.shape[0], -1))
@@ -82,16 +89,32 @@ def train_step(model, x_batch, y_batch, batch, optimizer, epoch, stub):
     optimizer.apply_gradients(zip(client_gradient, model.trainable_variables))
 
     with open('results.csv', 'a') as f:
-        f.write(f"{epoch}, {batch}, {loss}, {acc}, {latencia}, {bytes_tx / 2**20}, {bytes_rx / 2**20}\n")
+        f.write(f"{epoch}, {loss}, {acc}, {latencia}, {bytes_tx / 2**20}, {bytes_rx / 2**20}\n")
+    print(f"Batch sizes: X={x_batch} Y={y_batch}")
 
-for epoch in range(10):
-    batch_size = 64
-    n_batches  = X_train.shape[0]//batch_size
+ray.init(
+    address="ray://localhost:10001",
+    runtime_env={
+        "working_dir": "/home/samuel/Coding/distributed-computing/lab08/exercise",
+        "pip": ["tensorflow", "keras", "grpcio", "numpy"]})
 
-    for batch in range(n_batches):
-        print(f"Epoch {epoch} - Batch {batch}/{n_batches}")
+@ray.remote
+def training_client(X_batch, y_batch, client_id):
+    for epoch in range(1):
+        print(f"Client {client_id}")
+        train_step(X_batch, y_batch, epoch)
 
-        X_batch  = X_train[batch_size * batch : batch_size * (batch+1)]
-        y_batch  = y_train[batch_size * batch : batch_size * (batch+1)]
+num_clients = 2
+batch_size = 128
+client_data_size = X_train.shape[0] // num_clients
 
-        train_step(partial_model, X_batch, y_batch, batch, client_optimizer, epoch, stub)
+clients = []
+for client_id in range(num_clients):
+    # X_batch = X_train[client_id * client_data_size: (client_id + 1) * client_data_size]
+    # y_batch = y_train[client_id * client_data_size: (client_id + 1) * client_data_size]
+    X_batch = X_train[0: 1000]
+    y_batch = y_train[0: 1000]
+    client_task = training_client.remote(X_batch, y_batch, client_id)
+    clients.append(client_task)
+
+ray.get(clients)
