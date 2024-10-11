@@ -51,10 +51,12 @@ cifar10                              = keras.datasets.cifar10
 
 X_train, X_test                      = X_train / 255.0, X_test / 255.0
 
-partial_model    = create_partial_model(keras.layers.Input(shape=(32, 32, 3)))
+partial_m1 = create_partial_model(keras.layers.Input(shape=(32, 32, 3)))
+partial_m3 = create_client_final_model((128,))
+
 client_optimizer = tf.keras.optimizers.Adam()
 
-def train_step(model, x_batch, y_batch, optimizer, epoch):
+def train_step(m1, m3, x_batch, y_batch, optimizer, epoch):
     MAX_MESSAGE_LENGTH = 20 * 1024 * 1024 * 10
     channel = grpc.insecure_channel('172.17.0.1:50051', options=[
         ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
@@ -63,21 +65,35 @@ def train_step(model, x_batch, y_batch, optimizer, epoch):
 
     stub = pb2_grpc.SplitLearningStub(channel)
 
-    activations, tape     = get_activations(model, x_batch)
+    activations, tape     = get_activations(m1, x_batch)
     flattened_activations = tf.reshape(activations, (activations.shape[0], -1))
 
     latencia_start  = time.time()
     server_response = send_activations_to_server(stub, flattened_activations, y_batch, len(x_batch), 1)
     latencia_end    = time.time()
 
+    # Inicio de backpropagation
     activations_grad = tf.convert_to_tensor(server_response.gradients, dtype=tf.float32)
     activations_grad = tf.reshape(activations_grad, activations.shape)
 
+    # Atualizando M3
+    with tf.GradientTape() as tape_m3:
+        predictions_m3 = m3(activations)  # Forward pass through M3
+        loss_m3 = tf.keras.losses.sparse_categorical_crossentropy(y_batch, predictions_m3)
+        loss_m3 = tf.reduce_mean(loss_m3)
+
+    gradients_m3 = tape_m3.gradient(loss_m3, m3.trainable_variables)
+    optimizer.apply_gradients(zip(gradients_m3, m3.trainable_variables))
+
+    # Atualizando M1
     client_gradient = tape.gradient(
         activations,
-        model.trainable_variables,
+        m1.trainable_variables,
         output_gradients=activations_grad
     )
+
+    optimizer = tf.keras.optimizers.Adam()
+    optimizer.apply_gradients(zip(client_gradient, m1.trainable_variables))
 
     bytes_tx  = flattened_activations.numpy().nbytes
     bytes_rx  = activations_grad.numpy().nbytes
@@ -88,10 +104,7 @@ def train_step(model, x_batch, y_batch, optimizer, epoch):
     print(f"Latencia: {latencia} segundos")
     print(f"Data Tx: {bytes_tx / 2**20} MB")
     print(f"Data Rx: {bytes_rx / 2**20} MB")
-
-    optimizer.apply_gradients(zip(client_gradient, model.trainable_variables))
-
-
+    
     with open(f'/tmp/results.csv', 'a') as f:
         f.write(f"{epoch}, {loss}, {acc}, {latencia}, {bytes_tx / 2**20}, {bytes_rx / 2**20}\n")
 
@@ -102,11 +115,11 @@ ray.init(
         "pip": ["tensorflow", "keras", "grpcio", "numpy"]})
 
 @ray.remote
-def training_client(model, x_batch, y_batch, optimizer, epoch):
-    train_step(model, x_batch, y_batch, optimizer, epoch)
+def training_client(m1, m3, x_batch, y_batch, optimizer, epoch):
+    train_step(m1, m3, x_batch, y_batch, optimizer, epoch)
         
 
-num_clients = 4
+num_clients = 10
 batch_size = 16
 #client_data_size = X_train.shape[0] // num_clients
 client_data_size = 1000 // num_clients
@@ -119,7 +132,7 @@ for epoch in range(10):
     for client_id in range(num_clients):
         X_batch = X_train[client_id * client_data_size: (client_id + 1) * client_data_size]
         y_batch = y_train[client_id * client_data_size: (client_id + 1) * client_data_size]
-        client_task = training_client.remote(partial_model, X_batch, y_batch, client_optimizer, epoch)
+        client_task = training_client.remote(partial_m1, partial_m3, X_batch, y_batch, client_optimizer, epoch)
         clients.append(client_task)
         
 

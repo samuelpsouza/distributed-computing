@@ -21,13 +21,12 @@ class ServerModel(tf.keras.models.Model):
         x = self.dense2(x)
         return x
 
-def create_server_model(input_shape):
+def create_server_model():
     return ServerModel()
 
 class SplitLearningService(pb2_grpc.SplitLearningServicer):
-
     def __init__(self):
-        self.server_model = create_server_model((128,))
+        self.server_model = create_server_model()
         self.optimizer    = tf.keras.optimizers.Adam()
         self.metrics      = tf.keras.metrics.SparseCategoricalAccuracy()
 
@@ -47,7 +46,7 @@ class SplitLearningService(pb2_grpc.SplitLearningServicer):
             loss        = tf.reduce_mean(loss)
             acc         = self.metrics(labels, predictions)
 
-        print("BACKWARD")
+        print("BACKWARD FROM M2")
         server_gradients = tape.gradient(loss, self.server_model.trainable_variables)
         self.optimizer.apply_gradients(zip(server_gradients, self.server_model.trainable_variables))
 
