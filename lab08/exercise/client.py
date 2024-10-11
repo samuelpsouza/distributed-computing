@@ -19,6 +19,10 @@ def create_partial_model(input_layer):
     layer5 = keras.layers.Dense(128, activation='relu')(layer4)
     return Model(inputs=input_layer, outputs=layer5)
 
+def create_client_final_model(input_shape):
+    input_layer = keras.layers.Input(shape=input_shape)
+    output_layer = keras.layers.Dense(10, activation='softmax')(input_layer)
+    return Model(inputs=input_layer, outputs=output_layer)
 
 def get_activations(model, X):
     with tf.GradientTape(persistent=True) as tape:
@@ -47,8 +51,10 @@ cifar10                              = keras.datasets.cifar10
 
 X_train, X_test                      = X_train / 255.0, X_test / 255.0
 
+partial_model    = create_partial_model(keras.layers.Input(shape=(32, 32, 3)))
+client_optimizer = tf.keras.optimizers.Adam()
 
-def train_step(x_batch, y_batch, epoch):
+def train_step(model, x_batch, y_batch, optimizer, epoch):
     MAX_MESSAGE_LENGTH = 20 * 1024 * 1024 * 10
     channel = grpc.insecure_channel('172.17.0.1:50051', options=[
         ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
@@ -56,8 +62,6 @@ def train_step(x_batch, y_batch, epoch):
     ])
 
     stub = pb2_grpc.SplitLearningStub(channel)
-    model    = create_partial_model(keras.layers.Input(shape=(32, 32, 3)))
-    optimizer = tf.keras.optimizers.Adam()
 
     activations, tape     = get_activations(model, x_batch)
     flattened_activations = tf.reshape(activations, (activations.shape[0], -1))
@@ -66,7 +70,6 @@ def train_step(x_batch, y_batch, epoch):
     server_response = send_activations_to_server(stub, flattened_activations, y_batch, len(x_batch), 1)
     latencia_end    = time.time()
 
-    print("Received response from server")
     activations_grad = tf.convert_to_tensor(server_response.gradients, dtype=tf.float32)
     activations_grad = tf.reshape(activations_grad, activations.shape)
 
@@ -88,9 +91,9 @@ def train_step(x_batch, y_batch, epoch):
 
     optimizer.apply_gradients(zip(client_gradient, model.trainable_variables))
 
-    with open('results.csv', 'a') as f:
+
+    with open(f'/tmp/results.csv', 'a') as f:
         f.write(f"{epoch}, {loss}, {acc}, {latencia}, {bytes_tx / 2**20}, {bytes_rx / 2**20}\n")
-    print(f"Batch sizes: X={x_batch} Y={y_batch}")
 
 ray.init(
     address="ray://localhost:10001",
@@ -99,22 +102,25 @@ ray.init(
         "pip": ["tensorflow", "keras", "grpcio", "numpy"]})
 
 @ray.remote
-def training_client(X_batch, y_batch, client_id):
-    for epoch in range(1):
-        print(f"Client {client_id}")
-        train_step(X_batch, y_batch, epoch)
+def training_client(model, x_batch, y_batch, optimizer, epoch):
+    train_step(model, x_batch, y_batch, optimizer, epoch)
+        
 
-num_clients = 2
-batch_size = 128
-client_data_size = X_train.shape[0] // num_clients
+num_clients = 4
+batch_size = 16
+#client_data_size = X_train.shape[0] // num_clients
+client_data_size = 1000 // num_clients
+#n_batches  = X_train.shape[0]//batch_size
+n_batches  = 1000 // batch_size
 
 clients = []
-for client_id in range(num_clients):
-    # X_batch = X_train[client_id * client_data_size: (client_id + 1) * client_data_size]
-    # y_batch = y_train[client_id * client_data_size: (client_id + 1) * client_data_size]
-    X_batch = X_train[0: 1000]
-    y_batch = y_train[0: 1000]
-    client_task = training_client.remote(X_batch, y_batch, client_id)
-    clients.append(client_task)
+
+for epoch in range(10):
+    for client_id in range(num_clients):
+        X_batch = X_train[client_id * client_data_size: (client_id + 1) * client_data_size]
+        y_batch = y_train[client_id * client_data_size: (client_id + 1) * client_data_size]
+        client_task = training_client.remote(partial_model, X_batch, y_batch, client_optimizer, epoch)
+        clients.append(client_task)
+        
 
 ray.get(clients)

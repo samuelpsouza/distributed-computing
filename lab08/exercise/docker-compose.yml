@@ -18,7 +18,6 @@ services:
           memory: '6g'
     networks:
       - ray_net
-
   ray-worker:
     image: rayproject/ray:latest
     depends_on: 
@@ -33,10 +32,9 @@ services:
       resources:
         limits:
           cpus: ${NUM_CPU_WORKER}
-          memory: '6g'
+          memory: '2g'
     networks:
       - ray_net
-  
 networks:
   ray_net:
     ipam:
