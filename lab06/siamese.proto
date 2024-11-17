@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+service SiameseNetwork {
+  rpc SendVectors (VectorRequest) returns (DistanceResponse);
+}
+
+message VectorRequest {
+  int32 v1 = 1;
+  // int32 label = 2;
+  // int32 id = 3;
+}
+
+message DistanceResponse {
+  float distance = 1;
+  float loss = 2;
+}
